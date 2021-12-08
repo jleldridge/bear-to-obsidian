@@ -7,6 +7,8 @@ db = SQLite3::Database.new "#{data_root}/database.sqlite"
 zettel_directory = '/Users/luke/Library/Mobile Documents/iCloud~md~obsidian/Documents/bear-to-zettel'
 Dir.mkdir "#{zettel_directory}/images" unless File.directory?("#{zettel_directory}/images")
 
+ignore_list = ['.DS_Store']
+
 
 # Bear stores it's timestamps using unixepoch format with it's own start time.
 # The offset value I've determined (978307200) seems to be Jan 1, 2001 12:00:00 AM
@@ -47,8 +49,27 @@ db.execute(notes_query) do |row|
     used_file_names[new_note_name] = 1
   end
 
+  new_note_name = new_note_name.gsub('/', 'or')
+
   File.open("#{zettel_directory}/#{new_note_name}", 'w') { |f| f.write(text) }
-  links[row[0]] = new_note_name
+  note_links[row[1]] = new_note_name
 end
 
+# Parse wiki-links from files and replace them with markdown links
+Dir.entries("#{zettel_directory}").each do |file|
+  next if File.directory?("#{zettel_directory}/#{file}") || ignore_list.include?(file)
 
+  contents = File.read("#{zettel_directory}/#{file}")
+  puts file
+  wiki_links = contents.scan(/\[\[.*\]\]/)
+
+  wiki_links.each do |link|
+    next if !note_links[link[2...-2]]
+
+    puts link
+
+    contents = contents.gsub(link, "[#{link[2...-2]}](#{note_links[link[2...-2]]})")
+  end
+
+  File.open("#{zettel_directory}/#{file}", 'w') { |f| f.write(contents) }
+end
